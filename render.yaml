@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: scuba-scuba
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn code:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
