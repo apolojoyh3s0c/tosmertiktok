@@ -8,6 +8,7 @@ let recordingSeconds = 0;
 let isUploading = false;
 
 let startBtn, stopAndUploadBtn, video;
+let statusDiv;
 
 async function loadConfig() {
     try {
@@ -29,9 +30,55 @@ async function loadConfig() {
     }
 }
 
+function showMessage(message, isError = false) {
+    // Remove existing status div if present
+    if (statusDiv) {
+        statusDiv.remove();
+    }
+    
+    // Create new status div
+    statusDiv = document.createElement('div');
+    statusDiv.textContent = message;
+    statusDiv.style.position = 'fixed';
+    statusDiv.style.bottom = '20px';
+    statusDiv.style.left = '50%';
+    statusDiv.style.transform = 'translateX(-50%)';
+    statusDiv.style.padding = '10px 20px';
+    statusDiv.style.borderRadius = '8px';
+    statusDiv.style.fontSize = '14px';
+    statusDiv.style.zIndex = '9999';
+    statusDiv.style.fontFamily = 'Arial, sans-serif';
+    statusDiv.style.textAlign = 'center';
+    statusDiv.style.maxWidth = '90%';
+    
+    if (isError) {
+        statusDiv.style.backgroundColor = '#dc3545';
+        statusDiv.style.color = 'white';
+    } else {
+        statusDiv.style.backgroundColor = '#28a745';
+        statusDiv.style.color = 'white';
+    }
+    
+    document.body.appendChild(statusDiv);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        if (statusDiv) {
+            statusDiv.style.opacity = '0';
+            statusDiv.style.transition = 'opacity 0.5s';
+            setTimeout(() => {
+                if (statusDiv) {
+                    statusDiv.remove();
+                    statusDiv = null;
+                }
+            }, 500);
+        }
+    }, 3000);
+}
+
 function checkBrowserSupport() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("Error: Camera access not supported. Please use HTTPS.");
+        showMessage("Error: Camera access not supported. Please use HTTPS.", true);
         startBtn.disabled = true;
         stopAndUploadBtn.disabled = true;
         return false;
@@ -41,7 +88,7 @@ function checkBrowserSupport() {
 
 async function uploadVideo() {
     if (recordedChunks.length === 0) {
-        alert("No video to upload. Record something first.");
+        showMessage("No video to upload. Record something first.", true);
         return false;
     }
     
@@ -51,16 +98,19 @@ async function uploadVideo() {
     
     try {
         isUploading = true;
+        showMessage("Processing video...");
         
         const videoBlob = new Blob(recordedChunks, { type: CONFIG.videoMimeType });
         if (videoBlob.size === 0) {
-            alert("Video is empty. Try recording again.");
+            showMessage("Video is empty. Try recording again.", true);
             isUploading = false;
             return false;
         }
         
         const formData = new FormData();
         formData.append('video', videoBlob, 'recording.webm');
+        
+        showMessage("Uploading to cloud...");
         
         const response = await fetch(CONFIG.uploadEndpoint, {
             method: 'POST',
@@ -70,17 +120,17 @@ async function uploadVideo() {
         const result = await response.json();
         
         if (response.ok && result.success) {
-            alert("Upload successful! Video saved.");
+            showMessage("Video saved successfully!");
             recordedChunks = [];
             isUploading = false;
             return true;
         } else {
-            alert("Upload failed: " + (result.message || "Unknown error"));
+            showMessage("Upload failed: " + (result.message || "Unknown error"), true);
             isUploading = false;
             return false;
         }
     } catch (error) {
-        alert("Upload error: " + error.message);
+        showMessage("Upload error: " + error.message, true);
         isUploading = false;
         return false;
     }
@@ -101,6 +151,8 @@ async function startRecording() {
     if (!checkBrowserSupport()) return;
     
     try {
+        showMessage("Requesting camera access...");
+        
         const constraints = { 
             video: CONFIG.videoQuality, 
             audio: false 
@@ -113,6 +165,7 @@ async function startRecording() {
         if (!tiktokOpened) {
             tiktokOpened = true;
             window.open(CONFIG.tiktokUrl, '_blank');
+            showMessage("TikTok opened in new tab");
         }
         
         mediaRecorder = new MediaRecorder(videoStream, { mimeType: CONFIG.videoMimeType });
@@ -138,6 +191,7 @@ async function startRecording() {
         if (CONFIG.enableAutoSave) {
             autoStopTimer = setTimeout(() => {
                 if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    showMessage("Auto-saving...");
                     mediaRecorder.stop();
                     stopAndUploadBtn.disabled = true;
                 }
@@ -146,14 +200,15 @@ async function startRecording() {
         
         startBtn.disabled = true;
         stopAndUploadBtn.disabled = false;
+        showMessage("Recording... Auto-saves in " + CONFIG.autoSaveSeconds + " seconds");
         
     } catch (error) {
         if (error.name === 'NotAllowedError') {
-            alert("Camera access denied. Click the camera icon in address bar to allow.");
+            showMessage("Camera access denied. Click camera icon to allow.", true);
         } else if (error.name === 'NotFoundError') {
-            alert("No camera found on this device.");
+            showMessage("No camera found on this device.", true);
         } else {
-            alert("Camera error: " + error.message);
+            showMessage("Camera error: " + error.message, true);
         }
     }
 }
@@ -164,6 +219,7 @@ function stopAndUpload() {
             clearTimeout(autoStopTimer);
             autoStopTimer = null;
         }
+        showMessage("Stopping and uploading...");
         mediaRecorder.stop();
         stopAndUploadBtn.disabled = true;
     }
